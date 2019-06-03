@@ -68,6 +68,7 @@ public class V3ConstraintEvaluatorTransformer implements ConstraintEvaluatorTran
     private static final String AVAILABILITY_ZONE = "availabilityzone";
     private static final String MACHINE_ID = "machineid";
     private static final String MACHINE_TYPE = "machinetype";
+    private static final String IP_ALLOCATION = "ipallocation";
 
     private final MasterConfiguration config;
     private final SchedulerConfiguration schedulerConfiguration;
@@ -113,6 +114,10 @@ public class V3ConstraintEvaluatorTransformer implements ConstraintEvaluatorTran
             case MACHINE_TYPE:
                 return StringExt.isNotEmpty(value)
                         ? Optional.of(new MachineTypeConstraint(schedulerConfiguration, agentManagementService, value))
+                        : Optional.empty();
+            case IP_ALLOCATION:
+                return StringExt.isNotEmpty(value)
+                        ? Optional.of(new AvailabilityZoneConstraint(schedulerConfiguration, agentManagementService, value))
                         : Optional.empty();
         }
         logger.error("Unknown or not supported job hard constraint: {}", name);
