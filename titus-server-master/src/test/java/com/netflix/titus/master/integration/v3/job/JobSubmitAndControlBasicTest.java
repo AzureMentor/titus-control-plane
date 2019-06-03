@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Netflix, Inc.
+ * Copyright 2019 Netflix, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package com.netflix.titus.master.integration.v3.job;
 
+import java.util.Collections;
 import java.util.List;
 
 import com.netflix.titus.api.jobmanager.JobAttributes;
@@ -130,7 +131,8 @@ public class JobSubmitAndControlBasicTest extends BaseIntegrationTest {
         );
     }
 
-    @Test(timeout = 30_000)
+    // @Test(timeout = 30_000)
+    @Test
     public void testSubmitSimpleBatchJobAndKillTask() throws Exception {
         JobDescriptor<BatchJobExt> retryableJob = ONE_TASK_BATCH_JOB.but(jd -> jd.getExtensions().toBuilder()
                 .withRetryPolicy(JobModel.newImmediateRetryPolicy().withRetries(1).build())
@@ -198,6 +200,19 @@ public class JobSubmitAndControlBasicTest extends BaseIntegrationTest {
     @Test(timeout = 30_000)
     public void testEnableDisableServiceJob() throws Exception {
         jobsScenarioBuilder.schedule(ONE_TASK_SERVICE_JOB, jobScenarioBuilder -> jobScenarioBuilder
+                .template(ScenarioTemplates.jobAccepted())
+                .updateJobStatus(false)
+                .updateJobStatus(true)
+        );
+    }
+
+    @Test(timeout = 30_000)
+    public void testAzConstraint() throws Exception {
+        JobDescriptor<ServiceJobExt> azConstraintJob =
+                ONE_TASK_SERVICE_JOB.but(j -> j.getContainer().but(c -> c.toBuilder().withHardConstraints(Collections.singletonMap("availabilityzone", "value"))));
+
+
+        jobsScenarioBuilder.schedule(azConstraintJob, jobScenarioBuilder -> jobScenarioBuilder
                 .template(ScenarioTemplates.jobAccepted())
                 .updateJobStatus(false)
                 .updateJobStatus(true)

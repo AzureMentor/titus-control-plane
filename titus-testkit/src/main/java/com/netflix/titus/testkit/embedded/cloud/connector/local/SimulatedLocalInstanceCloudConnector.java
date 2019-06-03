@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -169,8 +170,12 @@ public class SimulatedLocalInstanceCloudConnector implements InstanceCloudConnec
                 .withInstanceState(Instance.InstanceState.Running)
                 .withHostname(agentInstance.getHostName())
                 .withIpAddress(agentInstance.getHostName())
-                .withAttributes(Collections.emptyMap())
+                .withAttributes(getInstanceAttributes(agentInstance))
                 .withLaunchTime(agentInstance.getLaunchTime())
                 .build();
+    }
+
+    private Map<String, String> getInstanceAttributes(SimulatedTitusAgent agentInstance) {
+        return Collections.singletonMap("availabilityZone", agentInstance.getZoneId());
     }
 }

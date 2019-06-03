@@ -84,6 +84,7 @@ import com.netflix.titus.master.mesos.VirtualMachineMasterService;
 import com.netflix.titus.master.model.job.TitusQueuableTask;
 import com.netflix.titus.master.scheduler.constraint.SystemHardConstraint;
 import com.netflix.titus.master.scheduler.constraint.TaskCache;
+import com.netflix.titus.master.scheduler.constraint.TaskCacheEventListener;
 import com.netflix.titus.master.scheduler.fitness.AgentManagementFitnessCalculator;
 import com.netflix.titus.master.scheduler.fitness.TitusFitnessCalculator;
 import com.netflix.titus.master.scheduler.resourcecache.AgentResourceCache;
@@ -256,7 +257,8 @@ public class DefaultSchedulingService implements SchedulingService {
                 .withFitnessGoodEnoughFunction(TitusFitnessCalculator.fitnessGoodEnoughFunction)
                 .withPreferentialNamedConsumableResourceEvaluator(preferentialNamedConsumableResourceEvaluator)
                 .withMaxConcurrent(schedulerConfiguration.getSchedulerMaxConcurrent())
-                .withTaskBatchSizeSupplier(schedulerConfiguration::getTaskBatchSize);
+                .withTaskBatchSizeSupplier(schedulerConfiguration::getTaskBatchSize)
+                .withSchedulingEventListener(new TaskCacheEventListener(taskCache));
 
         taskScheduler = setupTaskScheduler(virtualMachineService.getLeaseRescindedObservable(), schedulerBuilder);
         taskQueue = TaskQueues.createTieredQueue(2);
@@ -548,7 +550,7 @@ public class DefaultSchedulingService implements SchedulingService {
 
     @Override
     public void addTask(QueuableTask queuableTask) {
-        logger.info("Adding task to Fenzo: taskId={}, qAttributes={}", queuableTask.getId(), queuableTask.getQAttributes());
+        logger.error("Adding task to Fenzo: taskId={}, qAttributes={}", queuableTask.getId(), queuableTask.getQAttributes());
         taskQueue.queueTask(queuableTask);
     }
 

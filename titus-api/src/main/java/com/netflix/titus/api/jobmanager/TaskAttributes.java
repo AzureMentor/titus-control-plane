@@ -43,6 +43,7 @@ public final class TaskAttributes {
     public static final String TASK_ATTRIBUTES_NETWORK_INTERFACE_INDEX = "task.networkInterfaceIndex";
     public static final String TASK_ATTRIBUTES_EXECUTOR_URI_OVERRIDE = "task.executorUriOverride";
     public static final String TASK_ATTRIBUTES_TIER = "task.tier";
+    public static final String TASK_ATTRIBUTES_IP_ALLOCATION_ID = "task.ipAllocationId";
 
     /**
      * Task moved from one job to another.

@@ -405,7 +405,7 @@ public class JobScenarioBuilder {
     }
 
     public JobScenarioBuilder expectSome(int count, Predicate<TaskScenarioBuilder> predicate) {
-        logger.info("[{}] Expecting {} tasks to meet fulfill the predicate requirements", discoverActiveTest(), count);
+        logger.info("[{}] Expecting {} tasks to fulfill the predicate requirements", discoverActiveTest(), count);
         await().timeout(TIMEOUT_MS, TimeUnit.MILLISECONDS).until(() -> {
             long matching = getLastTaskHolders().stream().filter(t -> predicate.test(t.getTaskScenarioBuilder())).count();
             return matching == count;
