@@ -40,12 +40,15 @@ import com.netflix.titus.master.model.job.TitusQueuableTask;
 import com.netflix.titus.master.scheduler.constraint.ConstraintEvaluatorTransformer;
 import com.netflix.titus.master.scheduler.constraint.SystemHardConstraint;
 import com.netflix.titus.master.scheduler.constraint.SystemSoftConstraint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.netflix.titus.common.util.CollectionsExt.isNullOrEmpty;
 
 /**
  */
 public class V3QueueableTask implements TitusQueuableTask<Job, Task> {
+    private static final Logger logger = LoggerFactory.getLogger(V3QueueableTask.class);
 
     private static final String DEFAULT_GRP_NAME = "defaultGrp";
     private static final String SecurityGroupsResName = "ENIs";
@@ -101,6 +104,7 @@ public class V3QueueableTask implements TitusQueuableTask<Job, Task> {
             assignedResources.setConsumedNamedResources(consumeResults);
         }
 
+        logger.error("Queueing up task {}", task);
         this.softConstraints = toFenzoSoftConstraints(job, systemSoftConstraint, constraintEvaluatorTransformer, activeTasksGetter);
         this.hardConstraints = toFenzoHardConstraints(job, systemHardConstraint, constraintEvaluatorTransformer, activeTasksGetter);
 
@@ -215,6 +219,8 @@ public class V3QueueableTask implements TitusQueuableTask<Job, Task> {
         job.getJobDescriptor().getContainer().getHardConstraints().forEach((key, value) ->
                 constraintEvaluatorTransformer.hardConstraint(Pair.of(key, value), runningTasksGetter).ifPresent(result::add)
         );
+
+
         return result;
     }
 
