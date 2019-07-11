@@ -16,8 +16,10 @@
 
 package com.netflix.titus.master.scheduler.constraint;
 
-import java.util.List;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import com.netflix.fenzo.ConstraintEvaluator;
 import com.netflix.fenzo.TaskRequest;
@@ -25,34 +27,49 @@ import com.netflix.fenzo.TaskTrackerState;
 import com.netflix.fenzo.VirtualMachineCurrentState;
 import com.netflix.titus.api.agent.model.AgentInstance;
 import com.netflix.titus.api.agent.service.AgentManagementService;
-import com.netflix.titus.api.jobmanager.model.job.vpc.IpAddressAllocation;
-import com.netflix.titus.api.jobmanager.model.job.vpc.IpAddressLocation;
+import com.netflix.titus.api.jobmanager.model.job.JobDescriptor;
+import com.netflix.titus.api.jobmanager.model.job.vpc.SignedIpAddressAllocation;
+import com.netflix.titus.api.jobmanager.service.JobManagerConstants;
+import com.netflix.titus.api.jobmanager.service.V3JobOperations;
 import com.netflix.titus.common.annotation.Experimental;
+import com.netflix.titus.common.util.CollectionsExt;
 import com.netflix.titus.master.jobmanager.service.common.V3QueueableTask;
 import com.netflix.titus.master.scheduler.SchedulerConfiguration;
 import com.netflix.titus.master.scheduler.SchedulerUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static com.netflix.titus.api.jobmanager.TaskAttributes.TASK_ATTRIBUTES_IP_ALLOCATION_ID;
+import static com.netflix.titus.api.jobmanager.TaskAttributes.TASK_ATTRIBUTES_WAITING_FOR_IN_USE_IP_ALLOCATION;
 
 /**
- * Experimental constraint that prefers a machine that can allocate a specific IP.
+ * Experimental constraint that matches a machine that can allocate a specific IP.
  */
-@Experimental(deadline = "06/2019")
+@Experimental(deadline = "08/2019")
 public class IpAllocationConstraint implements ConstraintEvaluator {
+    private static final Logger logger = LoggerFactory.getLogger(IpAllocationConstraint.class);
 
     public static final String NAME = "IpAllocationConstraint";
 
     private static final Result VALID = new Result(true, null);
     private static final Result MACHINE_DOES_NOT_EXIST = new Result(false, "The machine does not exist");
-    private static final Result IP_ALLOCATION_FIELDS_DO_NOT_MATCH = new Result(false, "The machine does not match the specified IP allocation fields");
-    private static final Result NO_ZONE_ID = new Result(false, "Host without zone data");
+    private static final Result IP_ALLOCATION_NOT_IN_ZONE = new Result(false, "Assigned IP allocation not in instance's zone");
+    private static final Result INVALID_IP_ALLOCATION_ZONE = new Result(false, "Invalid zone for IP allocation");
+    private static final Result IP_ALLOCATION_ALREADY_IN_USE = new Result(false, "Assigned IP allocation used by another task");
 
     private final SchedulerConfiguration configuration;
     private final TaskCache taskCache;
     private final AgentManagementService agentManagementService;
+    private final V3JobOperations v3JobOperations;
 
-    public IpAllocationConstraint(SchedulerConfiguration configuration, TaskCache taskCache, AgentManagementService agentManagementService) {
+    public IpAllocationConstraint(SchedulerConfiguration configuration,
+                                  TaskCache taskCache,
+                                  AgentManagementService agentManagementService,
+                                  V3JobOperations v3JobOperations) {
         this.configuration = configuration;
         this.taskCache = taskCache;
         this.agentManagementService = agentManagementService;
+        this.v3JobOperations = v3JobOperations;
     }
 
     @Override
@@ -66,23 +83,82 @@ public class IpAllocationConstraint implements ConstraintEvaluator {
         if (!instanceOpt.isPresent()) {
             return MACHINE_DOES_NOT_EXIST;
         }
-
         AgentInstance agentInstance = instanceOpt.get();
-        List<IpAddressAllocation> ipAddressAllocations = ((V3QueueableTask)taskRequest).getJob().getJobDescriptor()
-                .getContainer()
-                .getContainerResources()
-                .getIpAddressAllocations();
-        return evaluate(agentInstance, ipAddressAllocations);
+
+        String taskId = ((V3QueueableTask)taskRequest).getTask().getId();
+        Map<String, String> taskContext = ((V3QueueableTask)taskRequest).getTask().getTaskContext();
+        if (!taskContext.containsKey(TASK_ATTRIBUTES_IP_ALLOCATION_ID)) {
+            // Task has no assigned IP, so any instance will do
+            return VALID;
+        }
+        String ipAllocationId = taskContext.get(TASK_ATTRIBUTES_IP_ALLOCATION_ID);
+
+        // Check if the task's assigned IP allocation is free
+        Optional<String> existingTaskAssignedIpAllocationId = taskCache.getTaskByIpAllocationId(ipAllocationId);
+        if (existingTaskAssignedIpAllocationId.isPresent()) {
+            // The IP allocation is already assigned, add a taskContext marking it is blocked by the prior assignment
+            applyIpWaitingContext(taskId, existingTaskAssignedIpAllocationId.get(), taskContext);
+            return IP_ALLOCATION_ALREADY_IN_USE;
+        }
+        removeIpWaitingContext(taskId, taskContext);
+
+        // Find the assigned IP allocation's zone ID
+        String instanceZoneId = agentInstance.getAttributes().getOrDefault(configuration.getAvailabilityZoneAttributeName(), "");
+        Optional<String> ipAllocationZoneId = getZoneIdForIpAllocationId(((V3QueueableTask)taskRequest).getJob().getJobDescriptor(), ipAllocationId);
+        return ipAllocationZoneId
+                .map(ipZoneId -> {
+                    if (ipZoneId.equals(instanceZoneId)) {
+                        logger.info("IP allocation constraint valid for task {}", taskId);
+                        return VALID;
+                    }
+                    return IP_ALLOCATION_NOT_IN_ZONE;
+                })
+                .orElse(INVALID_IP_ALLOCATION_ZONE);
     }
 
-    // Finds an unused IP allocation and matches its location (region, zone, subnet) to the agent instance
-    private Result evaluate(AgentInstance agentInstance, List<IpAddressAllocation> ipAddressAllocations) {
-        String instanceAvailabilityZone = agentInstance.getAttributes().getOrDefault(configuration.getAvailabilityZoneAttributeName(), "");
-
-
+    private void applyIpWaitingContext(String taskId, String blockedByTaskId, Map<String, String> taskContext) {
+        // TODO(Andrew L): There should be a better place to do this.
+        String fullCallReason = String.format("Failed scheduling constraint %s", this.getClass().getSimpleName());
+        v3JobOperations.updateTask(
+                taskId,
+                task -> {
+                    Map<String, String> newTaskContext = CollectionsExt.merge(
+                            taskContext,
+                            Collections.singletonMap(
+                                    TASK_ATTRIBUTES_WAITING_FOR_IN_USE_IP_ALLOCATION,
+                                    blockedByTaskId)
+                    );
+                    return Optional.of(task.toBuilder().withTaskContext(newTaskContext).build());
+                },
+                V3JobOperations.Trigger.Scheduler,
+                "Scheduler constraint waiting for in use IP allocation",
+                JobManagerConstants.SCHEDULER_CALLMETADATA.toBuilder().withCallReason(fullCallReason).build()
+        ).await(500, TimeUnit.MILLISECONDS);
     }
 
-    private IpAddressLocation getUnassignedIpAddressLocation(List<IpAddressAllocation> ipAddressAllocations) {
-        //
+    private void removeIpWaitingContext(String taskId, Map<String, String> taskContext) {
+        String fullCallReason = String.format("Scheduling constraint %s met", this.getClass().getSimpleName());
+        v3JobOperations.updateTask(
+                taskId,
+                task -> {
+                    Map<String, String> newTaskContext = CollectionsExt.copyAndRemove(
+                            taskContext,
+                            TASK_ATTRIBUTES_WAITING_FOR_IN_USE_IP_ALLOCATION
+                    );
+                    return Optional.of(task.toBuilder().withTaskContext(newTaskContext).build());
+                },
+                V3JobOperations.Trigger.Scheduler,
+                "Scheduler constraint not waiting for in use IP allocation",
+                JobManagerConstants.SCHEDULER_CALLMETADATA.toBuilder().withCallReason(fullCallReason).build()
+        ).await(500, TimeUnit.MILLISECONDS);
+    }
+
+    private Optional<String> getZoneIdForIpAllocationId(JobDescriptor<?> jobDescriptor, String ipAllocationId) {
+        for (SignedIpAddressAllocation signedIpAddressAllocation : jobDescriptor.getContainer().getContainerResources().getSignedIpAddressAllocations()) {
+            if (signedIpAddressAllocation.getIpAddressAllocation().getAllocationId().equals(ipAllocationId)) {
+                return Optional.of(signedIpAddressAllocation.getIpAddressAllocation().getIpAddressLocation().getAvailabilityZone());
+            }
+        }
+        return Optional.empty();
     }
 }

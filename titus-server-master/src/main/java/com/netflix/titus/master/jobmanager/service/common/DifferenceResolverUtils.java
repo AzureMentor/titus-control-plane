@@ -17,8 +17,10 @@
 package com.netflix.titus.master.jobmanager.service.common;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -49,6 +51,8 @@ import com.netflix.titus.master.jobmanager.service.common.action.task.BasicTaskA
 import com.netflix.titus.master.jobmanager.service.common.action.task.KillInitiatedActions;
 import com.netflix.titus.master.jobmanager.service.common.action.task.TaskTimeoutChangeActions;
 import com.netflix.titus.master.jobmanager.service.event.JobManagerReconcilerEvent;
+
+import static com.netflix.titus.api.jobmanager.TaskAttributes.TASK_ATTRIBUTES_IP_ALLOCATION_ID;
 
 /**
  * Collection of functions useful for batch and service difference resolvers.
@@ -226,6 +230,43 @@ public class DifferenceResolverUtils {
         countingFun.accept(runningJobHolder);
 
         return pendingTaskIds.size();
+    }
+
+    // Copies specific task context entries from a previous task to a replacement task
+    private static Map<String, String> getTaskContextFromPreviousTask(Task previousTask) {
+        // Copy the IP allocation task context to the replacement task
+        return previousTask.getTaskContext().containsKey(TASK_ATTRIBUTES_IP_ALLOCATION_ID)
+                ? Collections.singletonMap(TASK_ATTRIBUTES_IP_ALLOCATION_ID, previousTask.getTaskContext().get(TASK_ATTRIBUTES_IP_ALLOCATION_ID))
+                : Collections.emptyMap();
+    }
+
+    // Creates task context for an initial task
+    private static Map<String, String> getInitialTaskContext(JobView refJobView) {
+        // Get all IP allocations from the job
+        Set<String> unassignedIpAddressIds = refJobView.getJob().getJobDescriptor().getContainer().getContainerResources().getSignedIpAddressAllocations()
+                .stream()
+                .map(signedIpAddressAllocation -> signedIpAddressAllocation.getIpAddressAllocation().getAllocationId())
+                .collect(Collectors.toSet());
+
+        // Remove already assigned IP allocation
+        ((List<Task>)refJobView.getTasks()).stream()
+                .map(Task.class::cast)
+                .filter(task -> TaskState.isRunning(task.getStatus().getState()))
+                .map(task -> task.getTaskContext().getOrDefault(TASK_ATTRIBUTES_IP_ALLOCATION_ID, ""))
+                .forEach(unassignedIpAddressIds::remove);
+
+        if (!unassignedIpAddressIds.isEmpty()) {
+            return Collections.singletonMap(TASK_ATTRIBUTES_IP_ALLOCATION_ID, unassignedIpAddressIds.iterator().next());
+        }
+        return Collections.emptyMap();
+    }
+
+    // Get task context for a new or replacement task
+    public static Map<String, String> getTaskContext(JobView refJobView, Optional<EntityHolder> optionalPreviousTaskEntityHolder) {
+        return optionalPreviousTaskEntityHolder
+                .map(entityHolder -> (Task)entityHolder.getEntity())
+                .map(DifferenceResolverUtils::getTaskContextFromPreviousTask)
+                .orElseGet(() -> getInitialTaskContext(refJobView));
     }
 
     public static class JobView<EXT extends JobDescriptor.JobDescriptorExt, TASK extends Task> {

@@ -38,6 +38,8 @@ import com.netflix.titus.api.jobmanager.model.job.retry.DelayedRetryPolicy;
 import com.netflix.titus.api.jobmanager.model.job.retry.ExponentialBackoffRetryPolicy;
 import com.netflix.titus.api.jobmanager.model.job.retry.ImmediateRetryPolicy;
 import com.netflix.titus.api.jobmanager.model.job.retry.RetryPolicy;
+import com.netflix.titus.api.jobmanager.model.job.vpc.IpAddressAllocation;
+import com.netflix.titus.api.jobmanager.model.job.vpc.SignedIpAddressAllocation;
 import com.netflix.titus.api.jobmanager.service.JobManagerException;
 import com.netflix.titus.common.util.CollectionsExt;
 import com.netflix.titus.common.util.retry.Retryer;
@@ -472,5 +474,17 @@ public final class JobFunctions {
             after = task.getStatus();
         }
         return Optional.ofNullable(after);
+    }
+
+    public static Optional<String> allocateUnusedIpAllocation(Job<?> job) {
+        List<SignedIpAddressAllocation> signedIpAddressAllocations = job.getJobDescriptor().getContainer().getContainerResources().getSignedIpAddressAllocations();
+        Optional<String> optionalResult = Optional.empty();
+
+        for (SignedIpAddressAllocation signedIpAddressAllocation : signedIpAddressAllocations) {
+            IpAddressAllocation ipAddressAllocation = signedIpAddressAllocation.getIpAddressAllocation();
+
+        }
+
+        return optionalResult;
     }
 }
