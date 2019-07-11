@@ -26,38 +26,19 @@ import javax.validation.constraints.Size;
  */
 public class IpAddress {
 
+    @Size(min = 1, message = "Emtpy value not allowed")
+    private final String address;
+
     private IpAddress(Builder builder) {
-        family = builder.family;
         address = builder.address;
-        prefixLength = builder.prefixLength;
     }
 
     public static Builder newBuilder() {
         return new Builder();
     }
 
-    public enum Family {DEFAULT, V4, V6};
-
-    @NotNull(message = "'Family' is null")
-    private final Family family;
-
-    @Size(min = 1, message = "Emtpy value not allowed")
-    private final String address;
-
-    // TODO (Andrew L): Andrew some constraint check
-    // Max of 32? Do we allocate blocks?
-    private final int prefixLength;
-
-    public Family getFamily() {
-        return family;
-    }
-
     public String getAddress() {
         return address;
-    }
-
-    public int getPrefixLength() {
-        return prefixLength;
     }
 
     @Override
@@ -69,44 +50,24 @@ public class IpAddress {
             return false;
         }
         IpAddress ipAddress = (IpAddress) o;
-        return prefixLength == ipAddress.prefixLength &&
-                family == ipAddress.family &&
-                Objects.equals(address, ipAddress.address);
+        return address.equals(ipAddress.address);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(family, address, prefixLength);
+        return Objects.hash(address);
     }
 
+
     public static final class Builder {
-        private Family family;
         private String address;
-        private int prefixLength;
 
         private Builder() {
-        }
-
-        public Builder withFamily(Family val) {
-            family = val;
-            return this;
         }
 
         public Builder withAddress(String val) {
             address = val;
             return this;
-        }
-
-        public Builder withPrefixLength(int val) {
-            prefixLength = val;
-            return this;
-        }
-
-        public Builder but() {
-            return newBuilder()
-                    .withFamily(family)
-                    .withAddress(address)
-                    .withPrefixLength(prefixLength);
         }
 
         public IpAddress build() {

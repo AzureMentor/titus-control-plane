@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Netflix, Inc.
+ * Copyright 2019 Netflix, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -264,6 +264,33 @@ public class TaskScenarioBuilder {
         Preconditions.checkArgument(
                 getTaskExecutionHolder().getInstanceType() == expectedInstanceType,
                 "Task is expected to run on AWS instance %s, but is running on %s", expectedInstanceType, getTaskExecutionHolder().getInstanceType()
+        );
+        return this;
+    }
+
+    public TaskScenarioBuilder expectZoneId(String expectedZoneId) {
+        logger.info("[{}] Expecting current task to run in zone {}", discoverActiveTest(), expectedZoneId);
+        Preconditions.checkArgument(
+                getTaskExecutionHolder().getAgent().getZoneId() == expectedZoneId,
+                "Task is expected to run in AWS zone %s, but is running on %s", expectedZoneId, getTaskExecutionHolder().getAgent().getZoneId()
+        );
+        return this;
+    }
+
+    public TaskScenarioBuilder expectTaskContext(String key) {
+        logger.info("[{}] Expecting current task to have taskContext entry {}", discoverActiveTest(), key);
+        Preconditions.checkArgument(
+                getTask().getTaskContext().containsKey(key),
+                "Task context does not contain {}", key
+        );
+        return this;
+    }
+
+    public TaskScenarioBuilder expectUnsetTaskContext(String key) {
+        logger.info("[{}] Expecting current task to not have taskContext entry {}", discoverActiveTest(), key);
+        Preconditions.checkArgument(
+                !getTask().getTaskContext().containsKey(key),
+                "Task context contains unexpected key {}", key
         );
         return this;
     }

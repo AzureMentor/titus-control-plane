@@ -16,6 +16,7 @@
 
 package com.netflix.titus.api.jobmanager.model.job.vpc;
 
+import java.util.Objects;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
@@ -55,6 +56,24 @@ public class IpAddressAllocation {
         return ipAddress;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        IpAddressAllocation that = (IpAddressAllocation) o;
+        return Objects.equals(ipAddressLocation, that.ipAddressLocation) &&
+                Objects.equals(allocationId, that.allocationId) &&
+                Objects.equals(ipAddress, that.ipAddress);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(ipAddressLocation, allocationId, ipAddress);
+    }
 
     public static final class Builder {
         private IpAddressLocation ipAddressLocation;

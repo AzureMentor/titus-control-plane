@@ -104,7 +104,6 @@ public class V3QueueableTask implements TitusQueuableTask<Job, Task> {
             assignedResources.setConsumedNamedResources(consumeResults);
         }
 
-        logger.error("Queueing up task {}", task);
         this.softConstraints = toFenzoSoftConstraints(job, systemSoftConstraint, constraintEvaluatorTransformer, activeTasksGetter);
         this.hardConstraints = toFenzoHardConstraints(job, systemHardConstraint, constraintEvaluatorTransformer, activeTasksGetter);
 
@@ -219,7 +218,9 @@ public class V3QueueableTask implements TitusQueuableTask<Job, Task> {
         job.getJobDescriptor().getContainer().getHardConstraints().forEach((key, value) ->
                 constraintEvaluatorTransformer.hardConstraint(Pair.of(key, value), runningTasksGetter).ifPresent(result::add)
         );
-
+        if (null != constraintEvaluatorTransformer) {
+            constraintEvaluatorTransformer.ipAllocationConstraint().ifPresent(result::add);
+        }
 
         return result;
     }

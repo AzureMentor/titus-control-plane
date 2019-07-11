@@ -19,6 +19,7 @@ package com.netflix.titus.master.jobmanager.service.service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -63,6 +64,7 @@ import rx.schedulers.Schedulers;
 
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.areEquivalent;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.findTaskStateTimeouts;
+import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.getTaskContext;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.hasJobState;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.isTerminating;
 import static com.netflix.titus.master.jobmanager.service.service.action.BasicServiceTaskActions.removeFinishedServiceTaskAction;
@@ -215,9 +217,9 @@ public class ServiceDifferenceResolver implements ReconciliationEngine.Differenc
             return Optional.empty();
         }
 
-
+        Map<String, String> taskContext = getTaskContext(refJobView, previousTask);
         TitusChangeAction storeAction = storeWriteRetryInterceptor.apply(
-                createOrReplaceTaskAction(configuration, jobStore, refJobView.getJobHolder(), previousTask, clock)
+                createOrReplaceTaskAction(configuration, jobStore, refJobView.getJobHolder(), previousTask, clock, taskContext)
         );
         return Optional.of(storeAction);
     }
