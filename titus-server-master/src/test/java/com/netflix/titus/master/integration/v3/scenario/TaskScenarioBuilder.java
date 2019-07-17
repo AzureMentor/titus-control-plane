@@ -277,20 +277,11 @@ public class TaskScenarioBuilder {
         return this;
     }
 
-    public TaskScenarioBuilder expectTaskContext(String key) {
-        logger.info("[{}] Expecting current task to have taskContext entry {}", discoverActiveTest(), key);
+    public TaskScenarioBuilder expectTaskContext(String key, String value) {
+        logger.info("[{}] Expecting current task to have taskContext entry {},{}", discoverActiveTest(), key, value);
         Preconditions.checkArgument(
-                getTask().getTaskContext().containsKey(key),
-                "Task context does not contain {}", key
-        );
-        return this;
-    }
-
-    public TaskScenarioBuilder expectUnsetTaskContext(String key) {
-        logger.info("[{}] Expecting current task to not have taskContext entry {}", discoverActiveTest(), key);
-        Preconditions.checkArgument(
-                !getTask().getTaskContext().containsKey(key),
-                "Task context contains unexpected key {}", key
+                getTask().getTaskContext().getOrDefault(key, "").equals(value),
+                "Task context does not contain {},{}", key, value
         );
         return this;
     }

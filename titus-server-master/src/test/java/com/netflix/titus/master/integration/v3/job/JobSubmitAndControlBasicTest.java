@@ -20,15 +20,10 @@ import java.util.Collections;
 import java.util.List;
 
 import com.netflix.titus.api.jobmanager.JobAttributes;
-import com.netflix.titus.api.jobmanager.TaskAttributes;
 import com.netflix.titus.api.jobmanager.model.job.JobDescriptor;
 import com.netflix.titus.api.jobmanager.model.job.JobModel;
 import com.netflix.titus.api.jobmanager.model.job.ext.BatchJobExt;
 import com.netflix.titus.api.jobmanager.model.job.ext.ServiceJobExt;
-import com.netflix.titus.api.jobmanager.model.job.vpc.IpAddress;
-import com.netflix.titus.api.jobmanager.model.job.vpc.IpAddressAllocation;
-import com.netflix.titus.api.jobmanager.model.job.vpc.IpAddressLocation;
-import com.netflix.titus.api.jobmanager.model.job.vpc.SignedIpAddressAllocation;
 import com.netflix.titus.api.model.EfsMount;
 import com.netflix.titus.common.aws.AwsInstanceType;
 import com.netflix.titus.grpc.protogen.TaskStatus.TaskState;
@@ -222,87 +217,5 @@ public class JobSubmitAndControlBasicTest extends BaseIntegrationTest {
                 .updateJobStatus(false)
                 .updateJobStatus(true)
         );
-    }
-
-    // TODO(Andrew L): @Test(timeout = 30_000)
-    @Test
-    public void testIpAllocationConstraint() throws Exception {
-        String ipAllocationZone = "zoneB";
-
-        List<SignedIpAddressAllocation> signedIpAddressAllocations = Collections.singletonList(SignedIpAddressAllocation.newBuilder()
-                .withIpAddressAllocationSignature(new byte[0])
-                .withIpAddressAllocation(IpAddressAllocation.newBuilder()
-                        .withIpAddress(IpAddress.newBuilder()
-                                .withAddress("100.100.100.100")
-                                .build())
-                        .withUuid("867-5309")
-                        .withIpAddressLocation(IpAddressLocation.newBuilder()
-                                .withSubnetId("subnet-5")
-                                .withRegion("us-east-1")
-                                .withAvailabilityZone(ipAllocationZone)
-                                .build())
-                        .build())
-                .build()
-        );
-
-        JobDescriptor<ServiceJobExt> ipJobDescriptor =
-                ONE_TASK_SERVICE_JOB.but(j -> j.getContainer().but(c -> c.getContainerResources().toBuilder()
-                        .withSignedIpAddressAllocations(signedIpAddressAllocations)));
-
-        jobsScenarioBuilder.schedule(ipJobDescriptor, jobScenarioBuilder ->
-                jobScenarioBuilder
-                        .template(ScenarioTemplates.startTasksInNewJob())
-                        .allTasks(taskScenarioBuilder -> taskScenarioBuilder.expectZoneId(ipAllocationZone)));
-    }
-
-    // TODO(Andrew L): @Test(timeout = 30_000)
-    @Test
-    public void testAlreadyAssignedIpAllocationConstraint() throws Exception {
-        List<SignedIpAddressAllocation> signedIpAddressAllocations = Collections.singletonList(SignedIpAddressAllocation.newBuilder()
-                .withIpAddressAllocationSignature(new byte[0])
-                .withIpAddressAllocation(IpAddressAllocation.newBuilder()
-                        .withIpAddress(IpAddress.newBuilder()
-                                .withAddress("100.100.100.100")
-                                .build())
-                        .withUuid("867-5309")
-                        .withIpAddressLocation(IpAddressLocation.newBuilder()
-                                .withSubnetId("subnet-5")
-                                .withRegion("us-east-1")
-                                .withAvailabilityZone("zoneB")
-                                .build())
-                        .build())
-                .build()
-        );
-        JobDescriptor<ServiceJobExt> firstIpJobDescriptor =
-                ONE_TASK_SERVICE_JOB.but(j -> j.getContainer().but(c -> c.getContainerResources().toBuilder()
-                        .withSignedIpAddressAllocations(signedIpAddressAllocations)));
-
-        JobDescriptor<ServiceJobExt> secondIpJobDescriptor =
-                firstIpJobDescriptor.but(j -> j.getJobGroupInfo().toBuilder().withSequence("v001"));
-
-
-        jobsScenarioBuilder.schedule(firstIpJobDescriptor, jobScenarioBuilder ->
-                jobScenarioBuilder
-                        .template(ScenarioTemplates.startTasksInNewJob())
-                        .allTasks(taskScenarioBuilder -> taskScenarioBuilder.expectUnsetTaskContext(TaskAttributes.TASK_ATTRIBUTES_WAITING_FOR_IN_USE_IP_ALLOCATION)));
-
-        jobsScenarioBuilder.schedule(secondIpJobDescriptor, jobScenarioBuilder ->
-                        jobScenarioBuilder
-                                .template(ScenarioTemplates.jobAccepted())
-                                .expectAllTasksCreated()
-                                .allTasks(taskScenarioBuilder -> taskScenarioBuilder.expectStateUpdates(TaskState.Accepted))
-                                .allTasks(taskScenarioBuilder -> taskScenarioBuilder.expectTaskContext(TaskAttributes.TASK_ATTRIBUTES_WAITING_FOR_IN_USE_IP_ALLOCATION)));
-
-        jobsScenarioBuilder
-                .takeJob(0)
-                .template(ScenarioTemplates.killJob());
-
-        jobsScenarioBuilder
-                .takeJob(1)
-                .template(ScenarioTemplates.startTasks());
-
-        jobsScenarioBuilder
-                .takeJob(1)
-                .allTasks(taskScenarioBuilder -> taskScenarioBuilder.expectUnsetTaskContext(TaskAttributes.TASK_ATTRIBUTES_WAITING_FOR_IN_USE_IP_ALLOCATION));
     }
 }

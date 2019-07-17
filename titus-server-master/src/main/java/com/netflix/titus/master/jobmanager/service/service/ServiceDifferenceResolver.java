@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Netflix, Inc.
+ * Copyright 2019 Netflix, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -65,6 +66,7 @@ import rx.schedulers.Schedulers;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.areEquivalent;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.findTaskStateTimeouts;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.getTaskContext;
+import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.getUnassignedIpAllocations;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.hasJobState;
 import static com.netflix.titus.master.jobmanager.service.common.DifferenceResolverUtils.isTerminating;
 import static com.netflix.titus.master.jobmanager.service.service.action.BasicServiceTaskActions.removeFinishedServiceTaskAction;
@@ -184,11 +186,12 @@ public class ServiceDifferenceResolver implements ReconciliationEngine.Differenc
         boolean canUpdateStore = storeWriteRetryInterceptor.executionLimits(storeModel);
         List<ServiceJobTask> tasks = refJobView.getTasks();
         int missing = refJobView.getRequiredSize() - tasks.size();
+        Set<String> unassignedIpAllocations = getUnassignedIpAllocations(refJobView);
         if (canUpdateStore && missing > 0) {
             List<ChangeAction> missingTasks = new ArrayList<>();
             for (int i = 0; i < missing && allowedNewTasks.get() > 0; i++) {
                 allowedNewTasks.decrementAndGet();
-                createNewTaskAction(refJobView, Optional.empty()).ifPresent(missingTasks::add);
+                createNewTaskAction(refJobView, Optional.empty(), unassignedIpAllocations).ifPresent(missingTasks::add);
             }
             return missingTasks;
         } else if (missing < 0) {
@@ -206,7 +209,7 @@ public class ServiceDifferenceResolver implements ReconciliationEngine.Differenc
         return Collections.emptyList();
     }
 
-    private Optional<TitusChangeAction> createNewTaskAction(ServiceJobView refJobView, Optional<EntityHolder> previousTask) {
+    private Optional<TitusChangeAction> createNewTaskAction(ServiceJobView refJobView, Optional<EntityHolder> previousTask, Set<String> unassignedIpAllocations) {
         // Safety check
         long numberOfNotFinishedTasks = getNumberOfNotFinishedTasks(refJobView);
         if (numberOfNotFinishedTasks >= refJobView.getRequiredSize()) {
@@ -217,7 +220,7 @@ public class ServiceDifferenceResolver implements ReconciliationEngine.Differenc
             return Optional.empty();
         }
 
-        Map<String, String> taskContext = getTaskContext(refJobView, previousTask);
+        Map<String, String> taskContext = getTaskContext(previousTask, unassignedIpAllocations);
         TitusChangeAction storeAction = storeWriteRetryInterceptor.apply(
                 createOrReplaceTaskAction(configuration, jobStore, refJobView.getJobHolder(), previousTask, clock, taskContext)
         );
@@ -279,7 +282,7 @@ public class ServiceDifferenceResolver implements ReconciliationEngine.Differenc
                     if (isJobTerminating || isScaledDown(storeTask) || hasEnoughTasksRunning(refJobView)) {
                         actions.add(removeFinishedServiceTaskAction(jobStore, storeTask));
                     } else if (shouldRetry && TaskRetryers.shouldRetryNow(referenceTaskHolder, clock)) {
-                        createNewTaskAction(refJobView, Optional.of(referenceTaskHolder)).ifPresent(actions::add);
+                        createNewTaskAction(refJobView, Optional.of(referenceTaskHolder), Collections.emptySet()).ifPresent(actions::add);
                     }
                 }
             } else {

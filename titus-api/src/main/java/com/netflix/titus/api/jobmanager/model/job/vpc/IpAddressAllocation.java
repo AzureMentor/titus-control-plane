@@ -17,27 +17,27 @@
 package com.netflix.titus.api.jobmanager.model.job.vpc;
 
 import java.util.Objects;
-import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
+
+import com.netflix.titus.common.model.sanitizer.ClassFieldsNotNull;
 
 /**
  * VPC IP address allocated from Titus IP Service
  */
+@ClassFieldsNotNull
 public class IpAddressAllocation {
 
-    @NotNull(message = "'ipAddressLocation' is null")
     private final IpAddressLocation ipAddressLocation;
 
     @Size(min = 1, message = "Emtpy value not allowed")
     private final String allocationId;
 
-    @NotNull(message = "'ipAddress' is null")
     private final IpAddress ipAddress;
 
-    private IpAddressAllocation(Builder builder) {
-        ipAddressLocation = builder.ipAddressLocation;
-        allocationId = builder.allocationId;
-        ipAddress = builder.ipAddress;
+    public IpAddressAllocation(IpAddressLocation ipAddressLocation, String allocationId, IpAddress ipAddress) {
+        this.ipAddressLocation = ipAddressLocation;
+        this.allocationId = allocationId;
+        this.ipAddress = ipAddress;
     }
 
     public static Builder newBuilder() {
@@ -75,6 +75,15 @@ public class IpAddressAllocation {
         return Objects.hash(ipAddressLocation, allocationId, ipAddress);
     }
 
+    @Override
+    public String toString() {
+        return "IpAddressAllocation{" +
+                "ipAddressLocation=" + ipAddressLocation +
+                ", allocationId='" + allocationId + '\'' +
+                ", ipAddress=" + ipAddress +
+                '}';
+    }
+
     public static final class Builder {
         private IpAddressLocation ipAddressLocation;
         private String allocationId;
@@ -106,7 +115,7 @@ public class IpAddressAllocation {
         }
 
         public IpAddressAllocation build() {
-            return new IpAddressAllocation(this);
+            return new IpAddressAllocation(ipAddressLocation, allocationId, ipAddress);
         }
     }
 }

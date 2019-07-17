@@ -45,10 +45,10 @@ public class IpAddressLocation {
         return subnetId;
     }
 
-    private IpAddressLocation(Builder builder) {
-        region = builder.region;
-        availabilityZone = builder.availabilityZone;
-        subnetId = builder.subnetId;
+    private IpAddressLocation(String region, String availabilityZone, String subnetId) {
+        this.region = region;
+        this.availabilityZone = availabilityZone;
+        this.subnetId = subnetId;
     }
 
     public static Builder newBuilder() {
@@ -74,6 +74,14 @@ public class IpAddressLocation {
         return Objects.hash(region, availabilityZone, subnetId);
     }
 
+    @Override
+    public String toString() {
+        return "IpAddressLocation{" +
+                "region='" + region + '\'' +
+                ", availabilityZone='" + availabilityZone + '\'' +
+                ", subnetId='" + subnetId + '\'' +
+                '}';
+    }
 
     public static final class Builder {
         private String region;
@@ -106,7 +114,7 @@ public class IpAddressLocation {
         }
 
         public IpAddressLocation build() {
-            return new IpAddressLocation(this);
+            return new IpAddressLocation(region, availabilityZone, subnetId);
         }
     }
 }

@@ -17,8 +17,6 @@
 package com.netflix.titus.api.jobmanager.model.job.vpc;
 
 import java.util.Objects;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
 /**
@@ -29,8 +27,8 @@ public class IpAddress {
     @Size(min = 1, message = "Emtpy value not allowed")
     private final String address;
 
-    private IpAddress(Builder builder) {
-        address = builder.address;
+    private IpAddress(String address) {
+        this.address = address;
     }
 
     public static Builder newBuilder() {
@@ -58,6 +56,12 @@ public class IpAddress {
         return Objects.hash(address);
     }
 
+    @Override
+    public String toString() {
+        return "IpAddress{" +
+                "address='" + address + '\'' +
+                '}';
+    }
 
     public static final class Builder {
         private String address;
@@ -71,7 +75,7 @@ public class IpAddress {
         }
 
         public IpAddress build() {
-            return new IpAddress(this);
+            return new IpAddress(address);
         }
     }
 }

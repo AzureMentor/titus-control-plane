@@ -18,19 +18,19 @@ package com.netflix.titus.api.jobmanager.model.job.vpc;
 
 import java.util.Arrays;
 import java.util.Objects;
-import javax.validation.constraints.NotNull;
 
+import com.netflix.titus.common.model.sanitizer.ClassFieldsNotNull;
+
+@ClassFieldsNotNull
 public class SignedIpAddressAllocation {
 
-    @NotNull(message = "'ipAddressAllocation' is null")
     private final IpAddressAllocation ipAddressAllocation;
 
-    @NotNull(message = "'ipAddressAllocationSignature' is null")
     private final byte[] ipAddressAllocationSignature;
 
-    private SignedIpAddressAllocation(Builder builder) {
-        ipAddressAllocation = builder.ipAddressAllocation;
-        ipAddressAllocationSignature = builder.ipAddressAllocationSignature;
+    public SignedIpAddressAllocation(IpAddressAllocation ipAddressAllocation, byte[] ipAddressAllocationSignature) {
+        this.ipAddressAllocation = ipAddressAllocation;
+        this.ipAddressAllocationSignature = ipAddressAllocationSignature;
     }
 
     public IpAddressAllocation getIpAddressAllocation() {
@@ -59,6 +59,14 @@ public class SignedIpAddressAllocation {
         int result = Objects.hash(ipAddressAllocation);
         result = 31 * result + Arrays.hashCode(ipAddressAllocationSignature);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "SignedIpAddressAllocation{" +
+                "ipAddressAllocation=" + ipAddressAllocation +
+                ", ipAddressAllocationSignature=" + Arrays.toString(ipAddressAllocationSignature) +
+                '}';
     }
 
     public static Builder newBuilder() {
@@ -90,7 +98,7 @@ public class SignedIpAddressAllocation {
         }
 
         public SignedIpAddressAllocation build() {
-            return new SignedIpAddressAllocation(this);
+            return new SignedIpAddressAllocation(ipAddressAllocation, ipAddressAllocationSignature);
         }
     }
 }
